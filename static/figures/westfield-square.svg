@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 353" width="660" height="353" role="img" aria-labelledby="title description">
+<title id="title">Changes to Westfield Square</title>
+<desc id="description">Westfield Square, north at the top. A shared street (Oak Road) runs across the south in both 2010 and 2025. In 2010 a car park occupied the north-west, with a lawn to the north-east; a market hall stood in the south-west, with a pond to its east. In 2025 the car park was replaced by a community garden and the lawn by a play area. A café replaced the market hall, while the pond stayed in place. A new east–west footpath separates the northern and southern halves of the square; it did not exist in 2010.</desc>
+<g font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="660" height="353" rx="0" fill="#fff" stroke="none"/>
+<text x="26" y="36" fill="#24383b" font-size="22" text-anchor="start" font-weight="700">Changes to Westfield Square</text>
+<text x="26" y="61" fill="#485b60" font-size="15" text-anchor="start" font-weight="400">Site plans · north is at the top of both maps</text>
+<text x="169.5" y="101" fill="#116b63" font-size="20" text-anchor="middle" font-weight="700">2010</text>
+<rect x="26" y="115" width="287" height="218" rx="5" fill="#f5f6ef" stroke="#a9b5aa"/>
+<rect x="36" y="127" width="126" height="65" rx="3" fill="#dfe4e4" stroke="#a8b3b3"/>
+<text x="99" y="165" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">Car park</text>
+<rect x="177" y="127" width="126" height="65" rx="3" fill="#d9e8d2" stroke="#a7bfa2"/>
+<text x="240" y="165" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">Lawn</text>
+<rect x="46" y="239" width="109" height="46" rx="2" fill="#e3cec3" stroke="#bd998a"/>
+<text x="100.5" y="267" fill="#24383b" font-size="15" text-anchor="middle" font-weight="400">Market hall</text>
+<ellipse cx="238" cy="260" rx="51" ry="25" fill="#d2e8ed" stroke="#8cb7c0"/>
+<text x="238" y="266" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">Pond</text>
+<rect x="27" y="302" width="285" height="30" rx="0" fill="#d7dddd" stroke="none"/>
+<text x="169" y="323" fill="#485b60" font-size="15" text-anchor="middle" font-weight="400">Oak Road</text>
+<text x="490.5" y="101" fill="#116b63" font-size="20" text-anchor="middle" font-weight="700">2025</text>
+<rect x="347" y="115" width="287" height="218" rx="5" fill="#f5f6ef" stroke="#a9b5aa"/>
+<rect x="357" y="127" width="126" height="65" rx="3" fill="#d9e8d2" stroke="#a7bfa2"/>
+<text x="420" y="154" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">Community</text>
+<text x="420" y="175" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">garden</text>
+<rect x="498" y="127" width="126" height="65" rx="3" fill="#f2e4cd" stroke="#ccba98"/>
+<text x="561" y="165" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">Play area</text>
+<rect x="348" y="199" width="285" height="24" rx="0" fill="#f3ebda" stroke="none"/>
+<line x1="349" y1="199" x2="632" y2="199" stroke="#b59e7c" stroke-width="1" stroke-dasharray="5 4"/>
+<line x1="349" y1="223" x2="632" y2="223" stroke="#b59e7c" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="491" y="216" fill="#24383b" font-size="14" text-anchor="middle" font-weight="400">Footpath</text>
+<rect x="367" y="239" width="109" height="46" rx="2" fill="#e3cec3" stroke="#bd998a"/>
+<text x="421.5" y="267" fill="#24383b" font-size="15" text-anchor="middle" font-weight="400">Café</text>
+<ellipse cx="559" cy="260" rx="51" ry="25" fill="#d2e8ed" stroke="#8cb7c0"/>
+<text x="559" y="266" fill="#24383b" font-size="16" text-anchor="middle" font-weight="400">Pond</text>
+<rect x="348" y="302" width="285" height="30" rx="0" fill="#d7dddd" stroke="none"/>
+<text x="490" y="323" fill="#485b60" font-size="15" text-anchor="middle" font-weight="400">Oak Road</text>
+</g>
+</svg>

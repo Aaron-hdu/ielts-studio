@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 348" width="660" height="348" role="img" aria-labelledby="title description">
+<title id="title">Book loans at three town libraries</title>
+<desc id="description">Annual book loans, in thousands. Years: 2012, 2016, 2020, 2024. Harbour: 20, 30, 45, 55. Market: 45, 40, 35, 30. Hill: 10, 15, 15, 20.</desc>
+<g font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="660" height="348" rx="0" fill="#fff" stroke="none"/>
+<text x="26" y="36" fill="#24383b" font-size="22" text-anchor="start" font-weight="700">Book loans at three town libraries</text>
+<text x="26" y="60" fill="#485b60" font-size="15" text-anchor="start" font-weight="400">Annual loans (thousands)</text>
+<line x1="69" y1="300.0" x2="529" y2="300.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="305.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">0</text>
+<line x1="69" y1="265.0" x2="529" y2="265.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="270.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">10</text>
+<line x1="69" y1="230.0" x2="529" y2="230.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="235.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">20</text>
+<line x1="69" y1="195.0" x2="529" y2="195.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="200.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">30</text>
+<line x1="69" y1="160.0" x2="529" y2="160.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="165.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">40</text>
+<line x1="69" y1="125.0" x2="529" y2="125.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="130.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">50</text>
+<line x1="69" y1="90.0" x2="529" y2="90.0" stroke="#cbd7d7" stroke-width="1" />
+<text x="55" y="95.0" fill="#485b60" font-size="14" text-anchor="end" font-weight="400">60</text>
+<text x="70" y="324" fill="#485b60" font-size="15" text-anchor="middle" font-weight="400">2012</text>
+<text x="223" y="324" fill="#485b60" font-size="15" text-anchor="middle" font-weight="400">2016</text>
+<text x="376" y="324" fill="#485b60" font-size="15" text-anchor="middle" font-weight="400">2020</text>
+<text x="529" y="324" fill="#485b60" font-size="15" text-anchor="middle" font-weight="400">2024</text>
+<polyline fill="none" points="70,230.0 223,195.0 376,142.5 529,107.5" stroke="#116b63" stroke-width="3.5"/>
+<circle cx="70" cy="230.0" r="4.7" fill="#116b63"/>
+<circle cx="223" cy="195.0" r="4.7" fill="#116b63"/>
+<circle cx="376" cy="142.5" r="4.7" fill="#116b63"/>
+<circle cx="529" cy="107.5" r="4.7" fill="#116b63"/>
+<text x="542" y="112.5" fill="#116b63" font-size="16" text-anchor="start" font-weight="700">Harbour</text>
+<polyline fill="none" points="70,142.5 223,160.0 376,177.5 529,195.0" stroke="#a44c30" stroke-width="3.5"/>
+<rect x="65.4" y="137.9" width="9.2" height="9.2" rx="0" fill="#a44c30" stroke="none"/>
+<rect x="218.4" y="155.4" width="9.2" height="9.2" rx="0" fill="#a44c30" stroke="none"/>
+<rect x="371.4" y="172.9" width="9.2" height="9.2" rx="0" fill="#a44c30" stroke="none"/>
+<rect x="524.4" y="190.4" width="9.2" height="9.2" rx="0" fill="#a44c30" stroke="none"/>
+<text x="542" y="200.0" fill="#a44c30" font-size="16" text-anchor="start" font-weight="700">Market</text>
+<polyline fill="none" points="70,265.0 223,247.5 376,247.5 529,230.0" stroke="#436b9a" stroke-width="3.5"/>
+<path d="M 70 259.0 l 6 6 -6 6 -6 -6 Z" fill="#436b9a"/>
+<path d="M 223 241.5 l 6 6 -6 6 -6 -6 Z" fill="#436b9a"/>
+<path d="M 376 241.5 l 6 6 -6 6 -6 -6 Z" fill="#436b9a"/>
+<path d="M 529 224.0 l 6 6 -6 6 -6 -6 Z" fill="#436b9a"/>
+<text x="542" y="235.0" fill="#436b9a" font-size="16" text-anchor="start" font-weight="700">Hill</text>
+</g>
+</svg>

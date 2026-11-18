@@ -1,0 +1,15 @@
+# 本机学习记录、模型密钥和导出的备份
+学习数据/
+.agent-token
+.provider.json
+.provider.tmp
+.env
+.env.*
+!.env.example
+*.sqlite3
+*.sqlite3-*
+*.zip
+
+# Python 与系统生成文件
+__pycache__/
+.DS_Store

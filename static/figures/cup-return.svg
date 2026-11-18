@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 368" width="660" height="368" role="img" aria-labelledby="title description">
+<title id="title">A reusable cup scheme on a campus</title>
+<desc id="description">A campus cup-deposit system. A café lends a washed cup on payment of a deposit. The customer returns the used cup to a collection point and receives the deposit back. Staff take returned cups to an inspection station. Damaged cups are sent for recycling. Undamaged cups are washed, dried, and delivered back to cafés for their next loan.</desc>
+<g font-family="Arial, Helvetica, sans-serif">
+<rect x="0" y="0" width="660" height="368" rx="0" fill="#fff" stroke="none"/>
+<text x="26" y="36" fill="#24383b" font-size="22" text-anchor="start" font-weight="700">A reusable cup scheme on a campus</text>
+<text x="26" y="61" fill="#485b60" font-size="15" text-anchor="start" font-weight="400">Movement of cups between cafés and the campus sorting station</text>
+<rect x="26" y="92" width="154" height="60" rx="8" fill="#eff5f2" stroke="#9ab7af"/>
+<text x="103.0" y="117" fill="#24383b" font-size="16" text-anchor="middle" font-weight="700">Café lends cup</text>
+<text x="103.0" y="137" fill="#485b60" font-size="13" text-anchor="middle" font-weight="400">Deposit paid</text>
+<rect x="246" y="92" width="156" height="60" rx="8" fill="#eff5f2" stroke="#9ab7af"/>
+<text x="324.0" y="117" fill="#24383b" font-size="16" text-anchor="middle" font-weight="700">Cup returned</text>
+<text x="324.0" y="137" fill="#485b60" font-size="13" text-anchor="middle" font-weight="400">Deposit refunded</text>
+<rect x="480" y="92" width="154" height="60" rx="8" fill="#eff5f2" stroke="#9ab7af"/>
+<text x="557.0" y="117" fill="#24383b" font-size="16" text-anchor="middle" font-weight="700">Inspection</text>
+<text x="557.0" y="137" fill="#485b60" font-size="13" text-anchor="middle" font-weight="400">Returned cups sorted</text>
+<rect x="246" y="213" width="156" height="60" rx="8" fill="#eff5f2" stroke="#9ab7af"/>
+<text x="324.0" y="238" fill="#24383b" font-size="16" text-anchor="middle" font-weight="700">Wash and dry</text>
+<text x="324.0" y="258" fill="#485b60" font-size="13" text-anchor="middle" font-weight="400">Undamaged cups</text>
+<rect x="26" y="213" width="154" height="60" rx="8" fill="#eff5f2" stroke="#9ab7af"/>
+<text x="103.0" y="238" fill="#24383b" font-size="16" text-anchor="middle" font-weight="700">Delivery</text>
+<text x="103.0" y="258" fill="#485b60" font-size="13" text-anchor="middle" font-weight="400">Back to cafés</text>
+<rect x="480" y="284" width="154" height="60" rx="8" fill="#faf1e7" stroke="#9ab7af"/>
+<text x="557.0" y="309" fill="#24383b" font-size="16" text-anchor="middle" font-weight="700">Recycling</text>
+<text x="557.0" y="329" fill="#485b60" font-size="13" text-anchor="middle" font-weight="400">Damaged cups</text>
+<line x1="181" y1="122" x2="240" y2="122" stroke="#536d69" stroke-width="2" />
+<path d="M 240 122 L 231.0 126.0 L 231.0 118.0 Z" fill="#536d69"/>
+<line x1="403" y1="122" x2="474" y2="122" stroke="#536d69" stroke-width="2" />
+<path d="M 474 122 L 465.0 126.0 L 465.0 118.0 Z" fill="#536d69"/>
+<path d="M 518 153 V 183 H 324" fill="none" stroke="#536d69" stroke-width="2"/>
+<line x1="324" y1="183" x2="324" y2="207" stroke="#536d69" stroke-width="2" />
+<path d="M 324 207 L 320.0 198.0 L 328.0 198.0 Z" fill="#536d69"/>
+<line x1="245" y1="243" x2="186" y2="243" stroke="#536d69" stroke-width="2" />
+<path d="M 186 243 L 195.0 239.0 L 195.0 247.0 Z" fill="#536d69"/>
+<line x1="103" y1="212" x2="103" y2="157" stroke="#536d69" stroke-width="2" />
+<path d="M 103 157 L 107.0 166.0 L 99.0 166.0 Z" fill="#536d69"/>
+<line x1="585" y1="153" x2="585" y2="278" stroke="#536d69" stroke-width="2" />
+<path d="M 585 278 L 581.0 269.0 L 589.0 269.0 Z" fill="#536d69"/>
+</g>
+</svg>
