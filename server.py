@@ -11,10 +11,14 @@ import sqlite3
 import sys
 import urllib.parse
 
+import exercises
+import storage
 import backup
 import grading
+import historical
 import provider
-from studio import (DATA, ROOT, NOW, LOCK, Problem, append_edits, archive, cardlist, catalog,
+import studio
+from studio import ( ROOT, NOW, LOCK, Problem, append_edits, archive, cardlist, catalog,
                     detail, dump, finish, init, learn, make_session, require, review, session, transaction)
 
 STATIC=ROOT/"static"
@@ -75,7 +79,7 @@ class Handler(BaseHTTPRequestHandler):
                 headers={"Set-Cookie":"studio="+COOKIE+"; Path=/; HttpOnly; SameSite=Strict"} if path=="/" else {}
                 return self.reply(file.read_bytes(),mime,headers=headers)
             token=self.headers.get("Authorization","")
-            agent=bool(token and secrets.compare_digest(token,"Bearer "+(DATA/".agent-token").read_text(encoding="utf-8").strip()))
+            agent=bool(token and secrets.compare_digest(token,"Bearer "+(studio.DATA/".agent-token").read_text(encoding="utf-8").strip()))
             browser=("studio="+COOKIE in self.headers.get("Cookie","").split("; ") and self.headers.get("X-Studio")=="1")
             require(agent or browser,"需要本机网站会话或智能体令牌。",401)
             origin=self.headers.get("Origin")
@@ -89,6 +93,13 @@ class Handler(BaseHTTPRequestHandler):
             require(0<=length<=8_000_000,"请求过大。",413)
             body=json.loads(self.rfile.read(length)) if length else {}
             require(isinstance(body,dict),"需要 JSON 对象。")
+            if path=="/api/storage":
+                require(browser,"请在本机设置页查看或迁移数据。",403)
+                return self.reply(storage.describe() if method=="GET" else storage.relocate(body.get("path")))
+            if method=="POST" and path=="/api/exercises":
+                return self.reply(exercises.generate(body.get("cards")))
+            if method=="POST" and path=="/api/vocabulary":
+                return self.reply(exercises.supplement(body.get("session"),body.get("question")))
             with transaction() as db:
                 result=self.route(db,method,path,body,browser)
             self.reply(result)
@@ -105,7 +116,9 @@ class Handler(BaseHTTPRequestHandler):
         if method=="GET":
             if path=="/api/overview":
                 cards=cardlist(db)
-                return {"sessions":summaries(db),"card_count":len(cards),"due":sum(c["due"]<=NOW() for c in cards),"now":NOW(),"settings":provider.public()}
+                return {"sessions":summaries(db),"historical":historical.listing(),"card_count":len(cards),"due":sum(c["due"]<=NOW() for c in cards),"now":NOW(),"settings":provider.public()}
+            old=re.fullmatch(r"/api/history/([0-9]+)",path)
+            if old: return historical.read(old[1])
             if path=="/api/questions": return list(bank.values())
             if path=="/api/sessions": return summaries(db)
             if path=="/api/cards": return cardlist(db)
@@ -125,7 +138,7 @@ class Handler(BaseHTTPRequestHandler):
                 require(browser,"模型配置只在本机设置页更新。",403)
                 return provider.save(b)
             if path=="/api/sessions": return make_session(db,b,bank)
-            if path=="/api/cards": return learn(db,b.get("session"),b.get("question"),b.get("index"))
+            if path=="/api/cards": return learn(db,b.get("session"),b.get("question"),b.get("index"),b.get("section","expressions"))
             if path=="/api/reviews": return review(db,b)
             m=re.fullmatch(r"/api/sessions/([a-f0-9]+)/(edits|submit|grade|report)",path)
             if m:

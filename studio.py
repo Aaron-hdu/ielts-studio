@@ -24,7 +24,18 @@ def default_data_dir():
     return Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "ielts-studio"
 
 
-DATA = Path(os.environ.get("IELTS_DATA") or default_data_dir()).expanduser().resolve()
+LOCATION_FILE = default_data_dir().parent / ".ielts-studio-location.json"
+
+def configured_data_dir():
+    override = os.environ.get("IELTS_DATA")
+    if override:
+        return Path(override).expanduser().resolve()
+    if LOCATION_FILE.exists():
+        return Path(json.loads(LOCATION_FILE.read_text(encoding="utf-8"))["path"]).resolve()
+    return default_data_dir().resolve()
+
+
+DATA = configured_data_dir()
 LOCK = threading.RLock()
 NOW = lambda: int(time.time() * 1000)
 
@@ -155,7 +166,7 @@ def append_edits(db, sid, body):
     last = db.execute("SELECT event FROM edits WHERE sid=? ORDER BY seq DESC LIMIT 1",(sid,)).fetchone()
     last_t = json.loads(last[0])["t"] if last else 0
     for idx,e in enumerate(events,1):
-        require(isinstance(e,dict) and e.get("q") in s["texts"] and type(e.get("t")) is int and last_t <= e["t"] <= s["duration"], "编辑时间或题目无效。")
+        require(isinstance(e,dict) and e.get("q") in s["texts"] and type(e.get("t")) is int and last_t <= e["t"] <= (s["duration"] if len(s["questions"]) == 2 else max(0, NOW()-s["started"])+5000), "编辑时间或题目无效。")
         require(e.get("kind") in ("input","paste","delete","baseline","switch","away","back"), "未知编辑类型。")
         a, cut, add = e.get("at"),e.get("cut"),e.get("add")
         old = s["texts"][e["q"]]
@@ -211,13 +222,20 @@ def archive(db,sid):
                 tmp=path.with_suffix(".tmp")
                 tmp.write_text(old.rstrip()+"\n\n"+markdown_report(json.loads(report["body"]))+"\n"+marker+"\n", encoding="utf-8")
                 tmp.replace(path)
+            else:
+                from grading import vocabulary_markdown
+                items=json.loads(report["body"]).get("vocabulary",[])
+                if items and "### 词汇提升" not in old:
+                    tmp=path.with_suffix(".tmp")
+                    tmp.write_text(old.rstrip()+"\n\n"+vocabulary_markdown(items)+"\n",encoding="utf-8")
+                    tmp.replace(path)
 
 
 def finish(db,sid,body):
     s=session(db,sid)
     if not s["finished"]:
         require(body.get("revision")==s["revision"],"有尚未保存的编辑。",409)
-        moment=min(NOW(),s["started"]+s["duration"])
+        moment=min(NOW(),s["started"]+s["duration"]) if len(s["questions"]) == 2 else NOW()
         db.execute("UPDATE sessions SET finished=? WHERE id=?",(moment,sid))
     return session(db,sid)
 
@@ -240,19 +258,24 @@ def cardlist(db):
         item=dict(r)
         item.update(json.loads(item.pop("body")))
         item["origins"]=[dict(x) for x in db.execute("SELECT sid,qid FROM origins WHERE card=?",(r["id"],))]
+        progress=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+item["id"],)).fetchone()
+        item["flash_due"]=json.loads(progress[0])["due"] if progress else 0
         result.append(item)
     return result
 
 
-def learn(db,sid,qid,idx):
+def learn(db,sid,qid,idx,section="expressions"):
     row=db.execute("SELECT body FROM reports WHERE sid=? AND qid=?",(sid,qid)).fetchone()
     require(row and type(idx) is int,"找不到表达。")
-    expressions=json.loads(row[0])["expressions"]
+    require(section in ("expressions","vocabulary"),"无效的表达来源。")
+    expressions=json.loads(row[0]).get(section,[])
     require(0<=idx<len(expressions),"找不到表达。")
     ex=expressions[idx]
     normalized=" ".join(ex["target"].lower().split())
     db.execute("INSERT OR IGNORE INTO cards(id,target,body,due) VALUES(?,?,?,?)",(uid(),normalized,dump(ex),NOW()))
     card=db.execute("SELECT id FROM cards WHERE target=?",(normalized,)).fetchone()[0]
+    if section=="vocabulary":
+        db.execute("UPDATE cards SET body=? WHERE id=?",(dump(ex),card))
     db.execute("INSERT OR IGNORE INTO origins VALUES(?,?,?)",(card,sid,qid))
     return {"id":card}
 
@@ -265,9 +288,25 @@ def review(db,body):
     require(result in ("recall","alternative","again") and isinstance(body.get("answer"),str) and len(body["answer"])<=10000,"无效的练习结果。")
     key=body.get("id")
     require(isinstance(key,str) and re.fullmatch(r"[a-zA-Z0-9-]{8,64}",key),"缺少练习编号。")
+    mode=body.get("mode","recall")
     if not db.execute("SELECT 1 FROM reviews WHERE id=?",(key,)).fetchone():
-        streak=r[0]+1 if result=="recall" else 0
+        require(mode in ("flash","recall","cloze"),"未知练习模式。")
+        prior=r[0]
+        if mode=="flash":
+            state=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+cid,)).fetchone()
+            prior=json.loads(state[0])["streak"] if state else 0
+        streak=prior+1 if result=="recall" else 0
         delay=(min(30,2**min(5,streak-1))*86400000 if streak else (86400000 if result=="alternative" else 600000))
         db.execute("INSERT INTO reviews VALUES(?,?,?,?,?)",(key,cid,NOW(),body["answer"],result))
-        db.execute("UPDATE cards SET due=?,streak=? WHERE id=?",(NOW()+delay,streak,cid))
-    return {"ok":True}
+        due=NOW()+(30*60000 if mode=="flash" and result=="alternative" else delay)
+        db.execute("INSERT INTO prefs VALUES(?,?)",("review-mode:"+key,mode))
+        if mode=="flash":
+            db.execute("INSERT OR REPLACE INTO prefs VALUES(?,?)",("flash:"+cid,dump({"due":due,"streak":streak})))
+        else:
+            db.execute("UPDATE cards SET due=?,streak=? WHERE id=?",(due,streak,cid))
+    if mode=="flash":
+        state=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+cid,)).fetchone()
+        due=json.loads(state[0])["due"] if state else 0
+    else:
+        due=db.execute("SELECT due FROM cards WHERE id=?",(cid,)).fetchone()[0]
+    return {"ok":True,"due":due}

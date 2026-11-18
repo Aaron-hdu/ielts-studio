@@ -6,7 +6,8 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from studio import DATA, LOCK, Problem, connect, require
+import studio
+from studio import LOCK, Problem, connect, require
 
 
 def pack():
@@ -17,14 +18,14 @@ def pack():
         with zipfile.ZipFile(buf,"w",zipfile.ZIP_DEFLATED) as z:
             z.write(snap,"studio.sqlite3")
             for name in ("作文","配图"):
-                for p in (DATA/name).glob("*"):
-                    if p.is_file(): z.write(p,str(p.relative_to(DATA)))
+                for p in (studio.DATA/name).glob("*"):
+                    if p.is_file(): z.write(p,str(p.relative_to(studio.DATA)))
         return buf.getvalue()
 
 
 def restore(binary):
     from studio import init, uid
-    with LOCK, tempfile.TemporaryDirectory(dir=DATA) as tmp:
+    with LOCK, tempfile.TemporaryDirectory(dir=studio.DATA) as tmp:
         tmp=Path(tmp)
         try:
             with zipfile.ZipFile(io.BytesIO(binary)) as z:
@@ -42,19 +43,19 @@ def restore(binary):
                 require(schema(db)==schema(current) and db.execute("PRAGMA integrity_check").fetchone()[0]=="ok","备份数据库版本不匹配或已损坏。")
         except (zipfile.BadZipFile,sqlite3.DatabaseError):
             raise Problem("无法读取此备份。")
-        before=DATA/("恢复前备份-"+uid()+".zip")
+        before=studio.DATA/("恢复前备份-"+uid()+".zip")
         before.write_bytes(pack())
         old=tmp/"old"
         old.mkdir()
         try:
             for name in ("studio.sqlite3","作文","配图"):
-                live=DATA/name
+                live=studio.DATA/name
                 if live.exists(): live.replace(old/name)
                 if (tmp/name).exists(): (tmp/name).replace(live)
             init()
         except Exception:
             for p in old.iterdir():
-                live=DATA/p.name
+                live=studio.DATA/p.name
                 if live.is_dir(): shutil.rmtree(live)
                 p.replace(live)
             raise

@@ -6,13 +6,14 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from studio import DATA, Problem, dump, require
+import studio
+from studio import Problem, dump, require
 
 DEFAULT = {"mode":"codex","base":"https://api.openai.com/v1","model":"","key":"","auto":False,"goal":7}
 
 
 def settings():
-    path=DATA/".provider.json"
+    path=studio.DATA/".provider.json"
     return dict(DEFAULT,**(json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}))
 
 
@@ -35,9 +36,9 @@ def save(body):
     goal=body.get("goal",7)
     require(type(goal) in (int,float) and 1<=goal<=9 and goal*2==int(goal*2),"目标分数无效。")
     config={"mode":mode,"base":base,"model":model,"key":key,"auto":bool(body.get("auto")) and mode!="agent","goal":goal}
-    tmp=DATA/".provider.tmp"
+    tmp=studio.DATA/".provider.tmp"
     with os.fdopen(os.open(tmp,os.O_CREAT|os.O_TRUNC|os.O_WRONLY,0o600),"w",encoding="utf-8") as f: f.write(dump(config))
-    tmp.replace(DATA/".provider.json")
+    tmp.replace(studio.DATA/".provider.json")
     return public()
 
 

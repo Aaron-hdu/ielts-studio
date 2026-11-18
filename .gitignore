@@ -9,6 +9,7 @@
 *.sqlite3
 *.sqlite3-*
 *.zip
+页间写作室-Anki*.txt
 
 # Python 与系统生成文件
 __pycache__/
