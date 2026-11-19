@@ -9,12 +9,22 @@ import urllib.request
 import studio
 from studio import Problem, dump, require
 
-DEFAULT = {"mode":"codex","base":"https://api.openai.com/v1","model":"","key":"","auto":False,"goal":7}
+DEFAULT = {"mode":"codex","base":"https://api.openai.com/v1","model":"","codex_model":"","key":"","auto":False,"goal":7}
 
 
 def settings():
     path=studio.DATA/".provider.json"
     return dict(DEFAULT,**(json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}))
+
+
+def codex_models():
+    from pathlib import Path
+    directory=Path(os.environ.get("CODEX_HOME") or Path.home()/".codex")
+    try:
+        models=json.loads((directory/"models_cache.json").read_text(encoding="utf-8"))["models"]
+        return [m["slug"] for m in models if m.get("visibility")=="list" and isinstance(m.get("slug"),str)]
+    except (OSError,ValueError,KeyError,TypeError,AttributeError):
+        return []
 
 
 def public():
@@ -35,7 +45,9 @@ def save(body):
     require(mode!="api" or (model and (key or url.hostname in ("localhost","127.0.0.1","::1"))),"请填写模型名和该服务的 API Key。")
     goal=body.get("goal",7)
     require(type(goal) in (int,float) and 1<=goal<=9 and goal*2==int(goal*2),"目标分数无效。")
-    config={"mode":mode,"base":base,"model":model,"key":key,"auto":bool(body.get("auto")) and mode!="agent","goal":goal}
+    codex_model=body.get("codex_model",old["codex_model"])
+    require(isinstance(codex_model,str) and len(codex_model)<=120 and not any(c.isspace() for c in codex_model.strip()),"请输入有效的 Codex 模型 ID。")
+    config={"codex_model":codex_model.strip(),"mode":mode,"base":base,"model":model,"key":key,"auto":bool(body.get("auto")) and mode!="agent","goal":goal}
     tmp=studio.DATA/".provider.tmp"
     with os.fdopen(os.open(tmp,os.O_CREAT|os.O_TRUNC|os.O_WRONLY,0o600),"w",encoding="utf-8") as f: f.write(dump(config))
     tmp.replace(studio.DATA/".provider.json")

@@ -14,6 +14,7 @@ import urllib.parse
 
 import question_pack
 import online_questions
+import memory
 import exercises
 import storage
 import backup
@@ -129,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
             if method=="POST" and path=="/api/plan/generate": return self.reply(study_questions.generate(body))
             if method=="POST" and path=="/api/plan/coach": return self.reply(planning.coach(body.get("task")))
             if method=="POST" and path=="/api/exercises":
-                return self.reply(exercises.generate(body.get("cards")))
+                return self.reply(exercises.generate(body.get("cards"),body.get("mode","unknown")))
             if method=="POST" and path=="/api/language-check": return self.reply(grading.supplement_language(body.get("session"),body.get("question")))
             if method=="POST" and path=="/api/vocabulary":
                 return self.reply(exercises.supplement(body.get("session"),body.get("question")))
@@ -146,18 +147,28 @@ class Handler(BaseHTTPRequestHandler):
 
     def route(self,db,method,path,b,browser):
         bank=catalog(db)
+        if path=="/api/memory/options":
+            return memory.options(db) if method=="GET" else memory.update_options(db,b)
+        if path=="/api/memory/preview" and method=="POST":
+            return memory.preview(db,b.get("card"),b.get("mode"))
+        if path=="/api/memory/curve" and method=="POST":
+            return memory.curve(db,b.get("card"),b.get("mode"))
+        if path=="/api/memory/history" and method=="POST":
+            return memory.history(db,b.get("card"))
         if method=="GET":
             if path=="/api/overview":
                 cards=cardlist(db)
-                return {"sessions":summaries(db),"historical":historical.listing(),"card_count":len(cards),"due":sum(c["due"]<=NOW() for c in cards),"now":NOW(),"settings":provider.public()}
+                active_modes=memory.options(db)["modes"]
+                return {"sessions":summaries(db),"historical":historical.listing(),"card_count":len(cards),"due":sum(1 for c in cards for m in active_modes if c["memory"][m]["due"] is not None and c["memory"][m]["due"]<=NOW()),"now":NOW(),"settings":provider.public()}
             old=re.fullmatch(r"/api/history/([0-9]+)",path)
             if old: return historical.read(old[1])
             if path=="/api/plan": return planning.dashboard(db)
             if path=="/api/questions": return list(bank.values())
             if path=="/api/sessions": return summaries(db)
+            if path=="/api/exercises/history": return exercises.history(db)
             if path=="/api/cards": return cardlist(db)
             if path=="/api/reviews": return [dict(r) for r in db.execute("SELECT * FROM reviews ORDER BY moment DESC")]
-            if path=="/api/settings": return dict(provider.public(),codex_available=bool(grading.codex_binary()))
+            if path=="/api/settings": return dict(provider.public(),codex_available=bool(grading.codex_binary()),codex_models=provider.codex_models())
             if path=="/api/schema": return grading.SCHEMA
             if path=="/api/queue":
                 return [{"session":s["id"],"question":q["id"]} for s in summaries(db) if s["finished"] for q in s["questions"] if not db.execute("SELECT 1 FROM reports WHERE sid=? AND qid=?",(s["id"],q["id"])).fetchone() and session(db,s["id"])["texts"][q["id"]].strip()]

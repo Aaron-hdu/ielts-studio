@@ -1,0 +1,1 @@
+py-fsrs 6.3.0, from https://pypi.org/project/fsrs/6.3.0/. Bundled scheduling modules under the MIT license. Relative imports, type-only Self imports and equivalent if/elif branches support standalone Python 3.9.

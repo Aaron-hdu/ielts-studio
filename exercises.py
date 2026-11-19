@@ -4,7 +4,7 @@ import json
 import re
 import secrets
 
-from grading import STR, VOCAB, arr, generate_structured, obj
+from grading import STR, complete_learning, arr, generate_structured, obj
 from studio import Problem, archive, cardlist, dump, require, session, transaction
 
 QUESTIONS = obj(items=arr(obj(card=STR, sentence=STR, chinese=STR, span=STR)))
@@ -20,7 +20,24 @@ def key(text):
     return "exercise-seen:"+hashlib.sha256(normalized(text).encode()).hexdigest()
 
 
-def generate(ids):
+def history_item(cid, value):
+    if value.startswith("{"):
+        try:
+            item=json.loads(value)
+            if isinstance(item,dict) and all(isinstance(item.get(k),str) for k in ("sentence","span","chinese")):
+                return dict(item,card=cid)
+        except ValueError:
+            pass
+    return {"card":cid,"sentence":value}
+
+
+def history(db):
+    rows=db.execute("SELECT key,value FROM prefs WHERE key LIKE 'exercise-history:%' ORDER BY rowid DESC")
+    return [history_item(k.split(":",2)[1],v) for k,v in rows]
+
+
+def generate(ids,mode="unknown"):
+    require(mode in ("unknown","recall","cloze"),"无效练习题型。")
     require(isinstance(ids,list) and 1<=len(ids)<=8 and all(isinstance(i,str) for i in ids) and len(set(ids))==len(ids),"每批请选择 1–8 个不同的表达。")
     with transaction() as db:
         cards={c["id"]:c for c in cardlist(db)}
@@ -29,7 +46,7 @@ def generate(ids):
         for cid in ids:
             card=cards[cid]
             recent=db.execute("SELECT value FROM prefs WHERE key LIKE ? ORDER BY rowid DESC LIMIT 5",("exercise-history:"+cid+":%",))
-            words.append({"card":cid,"target":card["target"],"meaning":card["meaning"],"avoid":[card["context"],card["cue"],card["answer"]]+[r[0] for r in recent]})
+            words.append({"card":cid,"target":card["target"],"meaning":card["meaning"],"avoid":[card["context"],card["cue"],card["answer"]]+[history_item(cid,r[0])["sentence"] for r in recent]})
     for attempt in range(2):
         result=generate_structured({"cards":words,"variation":secrets.token_hex(4)},PROMPT,QUESTIONS)["items"]
         if [item["card"] for item in result]!=ids:
@@ -54,13 +71,12 @@ def generate(ids):
             if valid:
                 db.executemany("INSERT INTO prefs VALUES(?,?)",[(k,"1") for k in keys])
                 for item in result:
-                    db.execute("INSERT INTO prefs VALUES(?,?)",("exercise-history:"+item["card"]+":"+secrets.token_hex(8),item["sentence"]))
+                    db.execute("INSERT INTO prefs VALUES(?,?)",("exercise-history:"+item["card"]+":"+secrets.token_hex(8),dump(dict(item,mode=mode))))
                 return result
     raise Problem("模型未生成一整组不重复且可挖空的新题。请重新生成。",422)
 
 
 def supplement(sid,qid):
-    schema=obj(vocabulary=arr(VOCAB))
     with transaction() as db:
         s=session(db,sid)
         row=db.execute("SELECT body FROM reports WHERE sid=? AND qid=?",(sid,qid)).fetchone()
@@ -68,13 +84,13 @@ def supplement(sid,qid):
         report=json.loads(row[0])
         if "vocabulary" in report:
             return {"ok":True}
-        payload={"essay":s["texts"][qid],"existing":[x["target"] for x in report["expressions"]]}
-    instruction="""基于这篇雅思作文选择值得替换的词。最多四个，避免已有表达。original 逐字引用英文原词，target 给更贴切的近义词或词组，meaning 中文释义，usage 用中文解释语体、适用场合与不可互换的情形，collocation 英文常见搭配，context 英文完整例句，cue 提供新的整句中文练习，answer 用 target 自然翻译。短稿可少选或为空。"""
-    items=generate_structured(payload,instruction,schema)["vocabulary"][:max(0,min(4,8-len(report["expressions"])))]
+        job={"essay":s["texts"][qid],"question":next(q for q in s["questions"] if q["id"]==qid)}
+    report["vocabulary"]=[]
+    complete_learning(report,job,generate_structured,["vocabulary"])
     with transaction() as db:
         current=json.loads(db.execute("SELECT body FROM reports WHERE sid=? AND qid=?",(sid,qid)).fetchone()[0])
         if "vocabulary" not in current:
-            current["vocabulary"]=[v for v in items if v["original"].strip() and v["original"].casefold() in payload["essay"].casefold()]
+            current["vocabulary"]=report["vocabulary"]
             db.execute("UPDATE reports SET body=? WHERE sid=? AND qid=?",(dump(current),sid,qid))
             archive(db,sid)
     return {"ok":True}

@@ -123,6 +123,8 @@ def init():
             answer TEXT NOT NULL, result TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS prefs(key TEXT PRIMARY KEY, value TEXT NOT NULL);
         """)
+        import memory
+        memory.migrate(db)
         db.execute("UPDATE sessions SET grade_state='error',grade_error='服务重启中断了批改，可以重试。' WHERE grade_state='running'")
         for row in db.execute("SELECT id FROM sessions WHERE finished IS NOT NULL"):
             archive(db, row[0])
@@ -304,6 +306,8 @@ def fingerprint(s,qid):
 
 
 def cardlist(db):
+    import memory
+    states={k:memory.describe(json.loads(v)) for k,v in db.execute("SELECT key,value FROM prefs WHERE key LIKE 'memory:%'")}
     result=[]
     for r in db.execute("SELECT * FROM cards ORDER BY due,id"):
         item=dict(r)
@@ -311,6 +315,9 @@ def cardlist(db):
         item["origins"]=[dict(x) for x in db.execute("SELECT sid,qid FROM origins WHERE card=?",(r["id"],))]
         progress=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+item["id"],)).fetchone()
         item["flash_due"]=json.loads(progress[0])["due"] if progress else 0
+        item["memory"]={m:states.get(memory.state_key(item["id"],m),memory.describe(None)) for m in memory.MODES}
+        item["due"]=item["memory"]["recall"]["due"] or 0
+        item["flash_due"]=item["memory"]["flash"]["due"] or 0
         result.append(item)
     return result
 
@@ -332,32 +339,5 @@ def learn(db,sid,qid,idx,section="expressions"):
 
 
 def review(db,body):
-    cid=body.get("card")
-    r=db.execute("SELECT streak FROM cards WHERE id=?",(cid,)).fetchone()
-    require(r,"找不到练习卡。",404)
-    result=body.get("result")
-    require(result in ("recall","alternative","again") and isinstance(body.get("answer"),str) and len(body["answer"])<=10000,"无效的练习结果。")
-    key=body.get("id")
-    require(isinstance(key,str) and re.fullmatch(r"[a-zA-Z0-9-]{8,64}",key),"缺少练习编号。")
-    mode=body.get("mode","recall")
-    if not db.execute("SELECT 1 FROM reviews WHERE id=?",(key,)).fetchone():
-        require(mode in ("flash","recall","cloze"),"未知练习模式。")
-        prior=r[0]
-        if mode=="flash":
-            state=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+cid,)).fetchone()
-            prior=json.loads(state[0])["streak"] if state else 0
-        streak=prior+1 if result=="recall" else 0
-        delay=(min(30,2**min(5,streak-1))*86400000 if streak else (86400000 if result=="alternative" else 600000))
-        db.execute("INSERT INTO reviews VALUES(?,?,?,?,?)",(key,cid,NOW(),body["answer"],result))
-        due=NOW()+(30*60000 if mode=="flash" and result=="alternative" else delay)
-        db.execute("INSERT INTO prefs VALUES(?,?)",("review-mode:"+key,mode))
-        if mode=="flash":
-            db.execute("INSERT OR REPLACE INTO prefs VALUES(?,?)",("flash:"+cid,dump({"due":due,"streak":streak})))
-        else:
-            db.execute("UPDATE cards SET due=?,streak=? WHERE id=?",(due,streak,cid))
-    if mode=="flash":
-        state=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+cid,)).fetchone()
-        due=json.loads(state[0])["due"] if state else 0
-    else:
-        due=db.execute("SELECT due FROM cards WHERE id=?",(cid,)).fetchone()[0]
-    return {"ok":True,"due":due}
+    import memory
+    return memory.submit(db,body)
