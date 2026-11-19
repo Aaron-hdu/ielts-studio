@@ -59,13 +59,23 @@ def uid():
     return uuid.uuid4().hex[:16]
 
 
-def catalog():
+def catalog(db=None):
     result = {}
     for filename in ["practice.json", "cambridge.json"]:
         path = ROOT / "catalog" / filename
         if path.exists():
             for q in json.loads(path.read_text(encoding="utf-8")):
                 result[q["id"]] = q
+    with (ROOT/"catalog"/"study-tags.tsv").open(encoding="utf-8") as tags:
+        next(tags)
+        for line in tags:
+            qid, kind, topics = line.rstrip().split("\t")
+            if qid in result:
+                result[qid].update(study_type=kind, topics=topics.split("/"))
+    if db is not None:
+        for row in db.execute("SELECT value FROM prefs WHERE key LIKE 'question:ai-%'"):
+            q = json.loads(row[0])
+            result[q["id"]] = q
     return result
 
 
@@ -123,8 +133,35 @@ def session(db, sid):
     require(r, "找不到这次写作。", 404)
     s = dict(r)
     s["questions"] = json.loads(s["questions"])
+    for q in s["questions"]:
+        # Older sessions refer to resources that were once distributed with the app.
+        if q.get("figure","").startswith("/figures/cambridge/"):
+            name=Path(q["figure"]).name
+            q["figure"]="/question-media/"+name if (DATA/"配图"/name).is_file() else ""
+        if q.get("mode")=="official" and q.get("embed","").startswith("/figures/"):
+            q["embed"]=catalog().get(q["id"],{}).get("source",q.get("source",""))
     s["texts"] = json.loads(s["texts"])
+    timer=db.execute("SELECT value FROM prefs WHERE key=?",("timer:"+sid,)).fetchone()
+    s["timer"]=json.loads(timer[0]) if timer else {"paused_at":None,"paused_ms":0}
+    now=s["timer"]["paused_at"] or s["finished"] or NOW()
+    s["elapsed_ms"]=max(0,now-s["started"]-s["timer"]["paused_ms"])
     return s
+
+
+def set_pause(db,sid,body):
+    s=session(db,sid)
+    require(len(s["questions"])==1 and not s["finished"],"只有进行中的专项练习可以暂停。",409)
+    paused=body.get("paused")
+    require(type(paused) is bool and body.get("revision")==s["revision"],"请先同步当前稿件。",409)
+    timer=s["timer"]
+    now=NOW()
+    if paused and timer["paused_at"] is None:
+        timer["paused_at"]=now
+    elif not paused and timer["paused_at"] is not None:
+        timer["paused_ms"]+=max(0,now-timer["paused_at"])
+        timer["paused_at"]=None
+    db.execute("INSERT OR REPLACE INTO prefs VALUES(?,?)",("timer:"+sid,dump(timer)))
+    return timer
 
 
 def changes(db, sid):
@@ -163,10 +200,11 @@ def append_edits(db, sid, body):
     if not events:
         return {"revision":s["revision"]}
     require(not s["finished"] and base+overlap == s["revision"], "草稿版本已变化，请重新打开。",409)
+    require(s["timer"]["paused_at"] is None,"此练习已暂停，请刷新并继续计时后再写。",409)
     last = db.execute("SELECT event FROM edits WHERE sid=? ORDER BY seq DESC LIMIT 1",(sid,)).fetchone()
     last_t = json.loads(last[0])["t"] if last else 0
     for idx,e in enumerate(events,1):
-        require(isinstance(e,dict) and e.get("q") in s["texts"] and type(e.get("t")) is int and last_t <= e["t"] <= (s["duration"] if len(s["questions"]) == 2 else max(0, NOW()-s["started"])+5000), "编辑时间或题目无效。")
+        require(isinstance(e,dict) and e.get("q") in s["texts"] and type(e.get("t")) is int and last_t <= e["t"] <= (s["duration"] if len(s["questions"]) == 2 else s["elapsed_ms"]+5000), "编辑时间或题目无效。")
         require(e.get("kind") in ("input","paste","delete","baseline","switch","away","back"), "未知编辑类型。")
         a, cut, add = e.get("at"),e.get("cut"),e.get("add")
         old = s["texts"][e["q"]]
@@ -196,12 +234,14 @@ def archive(db,sid):
             original = s["texts"][q["id"]]
             lines = [f"# {title}", "", f"- 写作编号 {sid}", f"- 题目 {q['id']} · Academic Task {q['task']}",
                      f"- 交卷时间 {dt.datetime.fromtimestamp(s['finished']/1000).isoformat(timespec='seconds')}",
-                     f"- 本次用时 {(s['finished']-s['started'])//1000} 秒"]
+                     f"- 本次用时 {s['elapsed_ms']//1000} 秒"]
             if q.get("source"): lines.append(f"- 题源 {q['source']}")
             if s["parent"]: lines.append(f"- 上一稿 {s['parent']}")
             lines += ["","## 题目","",q.get("prompt") or title]
             if q.get("chart_data"): lines += ["", q["chart_data"]]
-            if q.get("figure"):
+            if q.get("figure","").startswith("/question-media/"):
+                lines += ["",f"![题目配图](../配图/{Path(q['figure']).name})"]
+            elif q.get("figure"):
                 from shutil import copyfile
                 asset = (ROOT/"static"/q["figure"].lstrip("/")).resolve()
                 if asset.is_file() and (ROOT/"static") in asset.parents:
@@ -229,6 +269,12 @@ def archive(db,sid):
                     tmp=path.with_suffix(".tmp")
                     tmp.write_text(old.rstrip()+"\n\n"+vocabulary_markdown(items)+"\n",encoding="utf-8")
                     tmp.replace(path)
+                body=json.loads(report["body"])
+                if "language_errors" in body and "### 拼写与语法" not in old:
+                    from grading import language_markdown
+                    tmp=path.with_suffix(".tmp")
+                    tmp.write_text(path.read_text(encoding="utf-8").rstrip()+"\n\n"+language_markdown(body["language_errors"])+"\n",encoding="utf-8")
+                    tmp.replace(path)
 
 
 def finish(db,sid,body):
@@ -236,6 +282,11 @@ def finish(db,sid,body):
     if not s["finished"]:
         require(body.get("revision")==s["revision"],"有尚未保存的编辑。",409)
         moment=min(NOW(),s["started"]+s["duration"]) if len(s["questions"]) == 2 else NOW()
+        if s["timer"]["paused_at"] is not None:
+            timer=s["timer"]
+            timer["paused_ms"]+=max(0,moment-timer["paused_at"])
+            timer["paused_at"]=None
+            db.execute("UPDATE prefs SET value=? WHERE key=?",(dump(timer),"timer:"+sid))
         db.execute("UPDATE sessions SET finished=? WHERE id=?",(moment,sid))
     return session(db,sid)
 

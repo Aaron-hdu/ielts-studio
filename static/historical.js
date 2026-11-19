@@ -36,18 +36,28 @@ async function historicalPage(id) {
     const feedback = sections.filter(s => !item.drafts.includes(s.title));
     const groups = [...drafts.map((s,i) => ({label:i ? "第" + (i+1) + "稿" : "原稿",sections:[s]})),
         {label:"历次反馈与示范",sections:feedback},{label:"语言修改复习",sections:historySections(review)}];
-    main.innerHTML = topbar("写作记录") + heading("Writing archive",item.title,
-        `练习 ${id} · Task ${item.task} · ${item.date} · 历史练习`) +
+    const question = historicalQuestion(item);
+    const recordedPrompt = sections.find(section => section.title === "题目")?.body;
+    main.innerHTML = topbar("写作记录") + heading("Writing archive",reportTitle(question),
+        `练习 ${id} · ${item.date} · 历史练习`) + reportQuestion(question, recordedPrompt) +
         '<div class="toolbar" id="versions"></div><section class="panel history-content" id="historicalText"></section>';
     const nav = $("#versions"), content = $("#historicalText");
     function select(index) {
         nav.innerHTML = groups.map((g,i) => `<button class="chip ${i===index?"on":""}" aria-pressed="${i===index}" data-group="${i}">${esc(g.label)}</button>`).join("") +
             button("下载 Markdown","archiveMd");
         nav.querySelectorAll("[data-group]").forEach(b => b.onclick = () => select(Number(b.dataset.group)));
-        $("#archiveMd").onclick = () => download(item.markdown,"历史练习-"+id+".md","text/markdown");
+        $("#archiveMd").onclick = () => {
+            const title = item.markdown.replace(/^# [^\n]*/, () => "# " + reportTitle(question));
+            const prompt = recordedPrompt || question.prompt;
+            const markdown = prompt ? title.replace("\n## 写作练习记录\n", () =>
+                "\n## 作答题目" + (!recordedPrompt && question.mode === "link" ? (question.prompt_source==="transcription"?"（题源转录）":"（题意整理）") : "") +
+                "\n\n" + prompt + (question.source ? "\n\n[原题来源](" + question.source + ")" : "") + "\n\n## 写作练习记录\n") : title;
+            download(markdown,"历史练习-"+id+".md","text/markdown");
+        };
         content.innerHTML = groups[index].sections.map(s => index < drafts.length
             ? `<h2>${esc(s.title)}</h2>${historyBody(s.body)}`
             : `<details class="archive-detail"><summary>${esc(s.title)}</summary>${historyBody(s.body)}</details>`).join("");
     }
-    select(0);
+    const requested=Number(new URLSearchParams(location.hash.split("?")[1]).get("version"));
+    select(requested>=1 && requested<=drafts.length && Number.isInteger(requested)?requested-1:0);
 }

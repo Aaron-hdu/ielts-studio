@@ -14,3 +14,9 @@
 # Python 与系统生成文件
 __pycache__/
 .DS_Store
+
+# 已移除的第三方题库文件
+/catalog/cambridge-sources.json
+/static/figures/cambridge/
+/static/figures/ielts-official-samples.pdf
+剑雅本地题文.md

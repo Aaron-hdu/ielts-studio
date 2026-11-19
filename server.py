@@ -5,24 +5,29 @@ import datetime as dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import mimetypes
+import os
 import re
 import secrets
 import sqlite3
 import sys
 import urllib.parse
 
+import question_pack
+import online_questions
 import exercises
 import storage
 import backup
 import grading
 import historical
+import planning
+import study_questions
 import provider
 import studio
 from studio import ( ROOT, NOW, LOCK, Problem, append_edits, archive, cardlist, catalog,
                     detail, dump, finish, init, learn, make_session, require, review, session, transaction)
 
 STATIC=ROOT/"static"
-COOKIE=secrets.token_urlsafe(32)
+COOKIE=os.environ.pop("IELTS_STUDIO_RELOAD_COOKIE", "") or secrets.token_urlsafe(32)
 BROWSER_TYPES={".js":"text/javascript",".css":"text/css"}
 
 
@@ -30,7 +35,7 @@ def summaries(db):
     rows=[]
     for r in db.execute("SELECT id,started,duration,finished,parent,questions,texts,grade_state FROM sessions ORDER BY started DESC"):
         s=dict(r)
-        s["questions"]=[{"id":q["id"],"task":q["task"],"title":q["title"]} for q in json.loads(s["questions"])]
+        s["questions"]=[{key:q[key] for key in ("id","task","title","book","test","group") if key in q} for q in json.loads(s["questions"])]
         s["words"]=sum(len(re.findall(r"[A-Za-z0-9]+(?:[’'-][A-Za-z0-9]+)*",x)) for x in json.loads(s.pop("texts")).values())
         s["graded"]=db.execute("SELECT COUNT(*) FROM reports WHERE sid=?",(s["id"],)).fetchone()[0]
         rows.append(s)
@@ -66,6 +71,12 @@ class Handler(BaseHTTPRequestHandler):
             hosts={f"{host}:{self.server.server_port}" for host in ("localhost","127.0.0.1")}
             host=self.headers.get("Host","")
             require(host in hosts,"仅接受本机地址。",403)
+            media=re.fullmatch(r"/question-media/(source-cam-[0-9-]+-[a-f0-9]{12}\.(?:png|jpg|webp))",path)
+            if media:
+                require(method=="GET" and "studio="+COOKIE in self.headers.get("Cookie","").split("; "),"需要本机网站会话。",403)
+                asset=studio.DATA/"配图"/media[1]
+                require(asset.is_file(),"本地题图缺失。",404)
+                return self.reply(asset.read_bytes(),mimetypes.guess_type(asset.name)[0])
             if not path.startswith("/api/"):
                 require(method=="GET","无效请求。",405)
                 if path=="/": file=STATIC/"index.html"
@@ -87,17 +98,39 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/backup" and method=="GET":
                 return self.reply(backup.pack(),"application/zip")
             length=int(self.headers.get("Content-Length","0"))
+            if path=="/api/question-library/pack":
+                if method=="GET": return self.reply(question_pack.pack(),"application/zip")
+                require(browser and 0<length<=128_000_000,"请在本机设置页选择题库包。")
+                return self.reply(question_pack.unpack(self.rfile.read(length)))
             if path=="/api/restore" and method=="POST":
                 require(browser and 0<length<=128_000_000,"请在本站选择有效备份。")
-                return self.reply(backup.restore(self.rfile.read(length)))
+                restored=backup.restore(self.rfile.read(length))
+                online_questions.resume_sync()
+                return self.reply(restored)
             require(0<=length<=8_000_000,"请求过大。",413)
             body=json.loads(self.rfile.read(length)) if length else {}
             require(isinstance(body,dict),"需要 JSON 对象。")
+            if path=="/api/question-library":
+                if method=="GET": return self.reply(online_questions.library_status())
+                return self.reply(online_questions.select_library(body.get("mode")))
+            if method=="GET" and path=="/api/question-library/text":
+                return self.reply(online_questions.library_markdown().encode(),"text/markdown; charset=utf-8")
+            if method=="POST" and path=="/api/sessions":
+                return self.reply(online_questions.create_session(body))
+            preview=re.fullmatch(r"/api/questions/([a-z0-9-]+)/preview",path)
+            if method=="GET" and preview:
+                with transaction() as db:
+                    q=catalog(db).get(preview[1])
+                require(q,"找不到这道题。",404)
+                return self.reply(online_questions.resolve(q))
             if path=="/api/storage":
                 require(browser,"请在本机设置页查看或迁移数据。",403)
                 return self.reply(storage.describe() if method=="GET" else storage.relocate(body.get("path")))
+            if method=="POST" and path=="/api/plan/generate": return self.reply(study_questions.generate(body))
+            if method=="POST" and path=="/api/plan/coach": return self.reply(planning.coach(body.get("task")))
             if method=="POST" and path=="/api/exercises":
                 return self.reply(exercises.generate(body.get("cards")))
+            if method=="POST" and path=="/api/language-check": return self.reply(grading.supplement_language(body.get("session"),body.get("question")))
             if method=="POST" and path=="/api/vocabulary":
                 return self.reply(exercises.supplement(body.get("session"),body.get("question")))
             with transaction() as db:
@@ -112,13 +145,14 @@ class Handler(BaseHTTPRequestHandler):
             self.reply({"error":"本机服务处理失败，已保存的数据可重试读取。"},status=500)
 
     def route(self,db,method,path,b,browser):
-        bank=catalog()
+        bank=catalog(db)
         if method=="GET":
             if path=="/api/overview":
                 cards=cardlist(db)
                 return {"sessions":summaries(db),"historical":historical.listing(),"card_count":len(cards),"due":sum(c["due"]<=NOW() for c in cards),"now":NOW(),"settings":provider.public()}
             old=re.fullmatch(r"/api/history/([0-9]+)",path)
             if old: return historical.read(old[1])
+            if path=="/api/plan": return planning.dashboard(db)
             if path=="/api/questions": return list(bank.values())
             if path=="/api/sessions": return summaries(db)
             if path=="/api/cards": return cardlist(db)
@@ -137,12 +171,12 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/settings":
                 require(browser,"模型配置只在本机设置页更新。",403)
                 return provider.save(b)
-            if path=="/api/sessions": return make_session(db,b,bank)
             if path=="/api/cards": return learn(db,b.get("session"),b.get("question"),b.get("index"),b.get("section","expressions"))
             if path=="/api/reviews": return review(db,b)
-            m=re.fullmatch(r"/api/sessions/([a-f0-9]+)/(edits|submit|grade|report)",path)
+            m=re.fullmatch(r"/api/sessions/([a-f0-9]+)/(edits|submit|grade|report|pause)",path)
             if m:
                 sid,action=m.groups()
+                if action=="pause": return studio.set_pause(db,sid,b)
                 if action=="edits": return append_edits(db,sid,b)
                 if action=="grade": return grading.queue_grade(db,sid)
                 if action=="submit":
@@ -164,6 +198,7 @@ if __name__=="__main__":
     args=p.parse_args()
     server=ThreadingHTTPServer(("127.0.0.1",args.port),Handler)
     init()
+    online_questions.resume_sync()
     print(f"页间写作室已启动 http://127.0.0.1:{server.server_port}/",flush=True)
     try: server.serve_forever()
     except KeyboardInterrupt: pass
