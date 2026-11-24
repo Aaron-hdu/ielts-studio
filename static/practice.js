@@ -42,7 +42,7 @@ async function reviewPage() {
         return;
     }
     const modes = {cloze:"例句挖空",recall:"回译"};
-    let mode="recall";
+    let mode="cloze";
     const grades={again:"忘了",hard:"困难",good:"记得",easy:"轻松"};
     const levels=["未练习","学习中","生疏","较熟悉","熟悉"];
     const dueNow=state=>state.due!==null && state.due<=Date.now();
@@ -220,8 +220,8 @@ async function reviewPage() {
             <div class="source-filters">${filterPanel}</div><div class="sec"><h2>选择要练的词和表达</h2><span class="meta" id="selectionCount"></span></div>
             <div class="actions"><button class="soft" data-select="all">全选</button><button class="soft" data-select="due">只选到期 · ${visible.filter(due).length}</button><button class="soft" data-select="none">清空</button></div>
             <div class="study-list">${visible.map(c=>`<label><input type="checkbox" value="${esc(c.id)}" ${selected.has(c.id)?"checked":""}><span><b>${esc(c.target)}</b><small>${esc(c.meaning)}</small><small class="memory-level" data-level="${c.memory[mode].level}">${c.memory[mode].level}${due(c)?" · 已到期":""}</small></span></label>`).join("")}</div>
-            <div class="actions">${button("生成新一轮练习","beginStudy",true)}
-            ${mode==="recall"?button("用报告里的例句练习","useStored"):""}${button("已生成的练习","historyExercises")}${button("快速翻看","browseWords")}${button("导出所选到 Anki","anki")}</div>
+            <div class="actions">${button("开始练习","useStored",true)}
+            ${button("生成新一轮练习","beginStudy")}${button("已生成的练习","historyExercises")}${button("快速翻看","browseWords")}${button("导出所选到 Anki","anki")}</div>
             <p class="hint topgap">每轮从已选表达生成新语境，使用设置中的 Codex 或 API。 Anki 2.1.54+ 以 Basic 导入，按「雅思作文 → Task → 来源作文」分牌组。</p>
             <details id="expressionLibrary" class="compactdetail topgap" ${library.open?"open":""}><summary>表达速查</summary>
             <div class="word-toolbar"><input type="search" class="field" id="expressionSearch" aria-label="搜索表达或中文释义" placeholder="搜索英文表达或中文释义"><small id="libraryCount" class="meta" aria-live="polite"></small></div>
@@ -299,7 +299,8 @@ async function reviewPage() {
                 const matches=savedPool.filter(x=>x.card===card.id && x.chinese && x.span);
                 if(matches.length)tasks.set(card.id+mode,matches[Math.floor(Math.random()*matches.length)]);
             }
-            if((!stored||dailyEntries&&mode==="cloze")&&!tasks.has(card.id+mode)) {
+            if(stored && card.prepared && !tasks.has(card.id+mode))tasks.set(card.id+mode,card.prepared);
+            if((!stored||mode==="cloze")&&!savedItem&&!tasks.has(card.id+mode)) {
                 area.innerHTML=`<h2>正在生成新练习…</h2><p class="hint">模型正在为所选表达编写新句子并核对历史题目。</p>`;
                 try {
                     const batch=dailyEntries?[card.id]:queue.slice(index,index+6).map(c=>c.id);

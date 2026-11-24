@@ -76,6 +76,29 @@ def generate(ids,mode="unknown"):
     raise Problem("模型未生成一整组不重复且可挖空的新题。请重新生成。",422)
 
 
+def collect(body):
+    import studio
+    from prepared import local_question
+    args=(body.get("session"),body.get("question"),body.get("index"),body.get("section","expressions"))
+    with transaction() as db:
+        card=studio.report_expression(db,*args)
+        target=" ".join(card["target"].lower().split())
+        existing=db.execute("SELECT 1 FROM cards JOIN prefs ON key='prepared:'||cards.id WHERE target=?", (target,)).fetchone()
+        seed=local_question(card)
+        if existing or seed:
+            return studio.learn(db,*args,prepared=seed)
+    # An irregular or paraphrased example needs a verified, maskable sentence.
+    for _ in range(2):
+        items=generate_structured({"cards":[{"card":"new","target":card["target"],"meaning":card["meaning"]}]},PROMPT,QUESTIONS)["items"]
+        if len(items)==1:
+            seed=items[0]
+            if seed["span"].strip() and seed["sentence"].count(seed["span"])==1 and re.search(r"[\u3400-\u9fff]",seed["chinese"]):
+                with transaction() as db:
+                    require(studio.report_expression(db,*args)==card,"报告已更改，请重新收藏。",409)
+                    return studio.learn(db,*args,prepared=seed)
+    raise Problem("未能准备有效的挖空题，请重新收藏。",422)
+
+
 def supplement(sid,qid):
     with transaction() as db:
         s=session(db,sid)

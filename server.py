@@ -129,6 +129,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(storage.describe() if method=="GET" else storage.relocate(body.get("path")))
             if method=="POST" and path=="/api/plan/generate": return self.reply(study_questions.generate(body))
             if method=="POST" and path=="/api/plan/coach": return self.reply(planning.coach(body.get("task")))
+            if method=="POST" and path=="/api/cards": return self.reply(exercises.collect(body))
             if method=="POST" and path=="/api/exercises":
                 return self.reply(exercises.generate(body.get("cards"),body.get("mode","unknown")))
             if method=="POST" and path=="/api/language-check": return self.reply(grading.supplement_language(body.get("session"),body.get("question")))
@@ -182,7 +183,6 @@ class Handler(BaseHTTPRequestHandler):
             if path=="/api/settings":
                 require(browser,"模型配置只在本机设置页更新。",403)
                 return provider.save(b)
-            if path=="/api/cards": return learn(db,b.get("session"),b.get("question"),b.get("index"),b.get("section","expressions"))
             if path=="/api/reviews": return review(db,b)
             m=re.fullmatch(r"/api/sessions/([a-f0-9]+)/(edits|submit|grade|report|pause)",path)
             if m:

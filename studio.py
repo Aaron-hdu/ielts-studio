@@ -125,6 +125,16 @@ def init():
         """)
         import memory
         memory.migrate(db)
+        from prepared import local_question
+        import exercises
+        prior={}
+        for item in exercises.history(db):
+            if item.get("span") and item.get("chinese"):
+                prior.setdefault(item["card"],item)
+        for cid,body in db.execute("SELECT id,body FROM cards WHERE NOT EXISTS (SELECT 1 FROM prefs WHERE key='prepared:'||cards.id)"):
+            seed=local_question(json.loads(body)) or prior.get(cid)
+            if seed:
+                db.execute("INSERT INTO prefs VALUES(?,?)",("prepared:"+cid,dump(seed)))
         db.execute("UPDATE sessions SET grade_state='error',grade_error='服务重启中断了批改，可以重试。' WHERE grade_state='running'")
         for row in db.execute("SELECT id FROM sessions WHERE finished IS NOT NULL"):
             archive(db, row[0])
@@ -307,30 +317,38 @@ def fingerprint(s,qid):
 
 def cardlist(db):
     import memory
+    prepared={k[9:]:json.loads(v) for k,v in db.execute("SELECT key,value FROM prefs WHERE key LIKE 'prepared:%'")}
     states={k:memory.describe(json.loads(v)) for k,v in db.execute("SELECT key,value FROM prefs WHERE key LIKE 'memory:%'")}
     result=[]
     for r in db.execute("SELECT * FROM cards ORDER BY due,id"):
         item=dict(r)
         item.update(json.loads(item.pop("body")))
         item["origins"]=[dict(x) for x in db.execute("SELECT sid,qid FROM origins WHERE card=?",(r["id"],))]
+        item["prepared"]=prepared.get(item["id"])
         item["memory"]={m:states.get(memory.state_key(item["id"],m),memory.describe(None)) for m in memory.MODES}
         item["due"]=item["memory"]["recall"]["due"] or 0
         result.append(item)
     return result
 
 
-def learn(db,sid,qid,idx,section="expressions"):
+def report_expression(db,sid,qid,idx,section):
     row=db.execute("SELECT body FROM reports WHERE sid=? AND qid=?",(sid,qid)).fetchone()
     require(row and type(idx) is int,"找不到表达。")
     require(section in ("expressions","vocabulary"),"无效的表达来源。")
     expressions=json.loads(row[0]).get(section,[])
     require(0<=idx<len(expressions),"找不到表达。")
-    ex=expressions[idx]
+    return expressions[idx]
+
+
+def learn(db,sid,qid,idx,section="expressions",prepared=None):
+    ex=report_expression(db,sid,qid,idx,section)
     normalized=" ".join(ex["target"].lower().split())
     db.execute("INSERT OR IGNORE INTO cards(id,target,body,due) VALUES(?,?,?,?)",(uid(),normalized,dump(ex),NOW()))
     card=db.execute("SELECT id FROM cards WHERE target=?",(normalized,)).fetchone()[0]
     if section=="vocabulary":
         db.execute("UPDATE cards SET body=? WHERE id=?",(dump(ex),card))
+    if prepared:
+        db.execute("INSERT OR IGNORE INTO prefs VALUES(?,?)",("prepared:"+card,dump(prepared)))
     db.execute("INSERT OR IGNORE INTO origins VALUES(?,?,?)",(card,sid,qid))
     return {"id":card}
 

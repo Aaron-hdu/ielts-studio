@@ -10,7 +10,7 @@ from studio import NOW, dump, require
 
 MODES = ("recall", "cloze")
 RATINGS = {"again": Rating.Again, "hard": Rating.Hard, "good": Rating.Good, "easy": Rating.Easy}
-DEFAULT = {"retention": 90, "new_limit": 5, "modes": ["recall"]}
+DEFAULT = {"retention": 90, "new_limit": 5, "modes": ["cloze"]}
 
 
 def pref(db, key, default=None):
@@ -78,6 +78,10 @@ def apply(db, cid, mode, grade, now, scheduler):
 
 
 def migrate(db):
+    if not pref(db,"cloze-default-v1"):
+        settings=dict(options(db),modes=["cloze"])
+        put(db,"fsrs-options",settings)
+        put(db,"cloze-default-v1",True)
     if pref(db,"fsrs-output-migrated"):
         return
     settings=options(db)
