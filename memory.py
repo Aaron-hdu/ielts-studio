@@ -8,7 +8,7 @@ from vendor.fsrs.scheduler import Scheduler
 from vendor.fsrs.state import State
 from studio import NOW, dump, require
 
-MODES = ("recall", "cloze", "flash")
+MODES = ("recall", "cloze")
 RATINGS = {"again": Rating.Again, "hard": Rating.Hard, "good": Rating.Good, "easy": Rating.Easy}
 DEFAULT = {"retention": 90, "new_limit": 5, "modes": ["recall"]}
 
@@ -39,7 +39,7 @@ def millis(date):
 
 
 def state_key(cid, mode):
-    return f"memory:{cid}:{mode}"
+    return f"memory:{cid}:output"
 
 
 def describe(state):
@@ -78,17 +78,25 @@ def apply(db, cid, mode, grade, now, scheduler):
 
 
 def migrate(db):
-    if pref(db,"fsrs-migrated"):
+    if pref(db,"fsrs-output-migrated"):
         return
-    scheduler = engine(options(db))
+    settings=options(db)
+    settings["modes"]=[next((m for m in MODES if m in settings["modes"]),"recall")]
+    put(db,"fsrs-options",settings)
+    for row in db.execute("SELECT substr(key,13) FROM prefs WHERE key LIKE 'review-mode:%' AND value='flash'").fetchall():
+        review_id=row[0]
+        db.execute("DELETE FROM reviews WHERE id=?",(review_id,))
+        db.execute("DELETE FROM prefs WHERE key IN (?,?)",("attempt:"+review_id,"review-mode:"+review_id))
+    db.execute("DELETE FROM prefs WHERE key LIKE 'flash:%' OR key LIKE 'memory:%'")
+    scheduler = engine(settings)
     rows = db.execute("""SELECT r.*,p.value mode FROM reviews r
         LEFT JOIN prefs p ON p.key='review-mode:'||r.id ORDER BY moment,r.rowid""")
     for row in rows:
         mode=row["mode"]
-        grade={"again":"again","recall":"good"}.get(row["result"])
-        if mode in MODES and grade:
+        grade={"recall":"good"}.get(row["result"],row["result"])
+        if mode in MODES and grade in RATINGS:
             apply(db,row["card"],mode,grade,row["moment"],scheduler)
-    put(db,"fsrs-migrated",True)
+    put(db,"fsrs-output-migrated",True)
 
 
 def update_options(db,b):
@@ -96,7 +104,7 @@ def update_options(db,b):
     require(type(retention) is int and 70<=retention<=97 and type(limit) is int and 0<=limit<=100,
             "保留率应为 70–97%，每日新学数量应为 0–100。")
     require(isinstance(modes,list) and modes and all(m in MODES for m in modes),"请选择复习模式。")
-    settings={"retention":retention,"new_limit":limit,"modes":list(dict.fromkeys(modes))}
+    settings={"retention":retention,"new_limit":limit,"modes":[modes[0]]}
     if options(db)["retention"]!=retention:
         scheduler=engine(settings)
         for key,value in db.execute("SELECT key,value FROM prefs WHERE key LIKE 'memory:%'").fetchall():
@@ -157,7 +165,7 @@ def submit(db,b):
         detail={k:b.get(k,"") for k in ("prompt","reference","source","hint")}
         require(all(isinstance(v,str) and len(v)<=12000 for v in detail.values()),"题目内容过长。")
         now=NOW()
-        mapped={"recall":"good","alternative":"hard" if mode=="flash" else None}.get(grade,grade)
+        mapped={"recall":"good","alternative":None}.get(grade,grade)
         if mapped:
             state=apply(db,cid,mode,mapped,now,engine(options(db)))
             detail["due"]=state["due"]

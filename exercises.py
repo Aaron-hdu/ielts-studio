@@ -4,7 +4,7 @@ import json
 import re
 import secrets
 
-from grading import STR, complete_learning, arr, generate_structured, obj
+from grading import STR, saved_learning, complete_learning, arr, generate_structured, obj
 from studio import Problem, archive, cardlist, dump, require, session, transaction
 
 QUESTIONS = obj(items=arr(obj(card=STR, sentence=STR, chinese=STR, span=STR)))
@@ -84,7 +84,7 @@ def supplement(sid,qid):
         report=json.loads(row[0])
         if "vocabulary" in report:
             return {"ok":True}
-        job={"essay":s["texts"][qid],"question":next(q for q in s["questions"] if q["id"]==qid)}
+        job={"saved_learning":saved_learning(db),"essay":s["texts"][qid],"question":next(q for q in s["questions"] if q["id"]==qid)}
     report["vocabulary"]=[]
     complete_learning(report,job,generate_structured,["vocabulary"])
     with transaction() as db:

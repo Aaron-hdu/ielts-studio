@@ -22,12 +22,12 @@ async function exportAnki(cards) {
     const clean = value => String(value).replace(/::|[\t\r\n]/g," ").trim();
     const rows=[];
     for(const c of cards){
-        const back=[c.meaning,c.usage,c.collocation,c.context].filter(Boolean).map(field).join("<br><br>");
+        const back=[c.target,c.context,c.usage,c.collocation].filter(Boolean).map(field).join("<br><br>");
         for(const o of c.sources){
             const deck=["雅思作文",o.task,o.sid?`${o.name} · ${o.date} · ${o.sid.slice(-6)}`:o.name].map(clean).join("::");
             const digest=new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode([c.id,o.sid,o.qid].join("/"))));
             const guid=Array.from(digest.slice(0,12),x=>x.toString(16).padStart(2,"0")).join("");
-            rows.push([field(c.target),back,deck,guid].join("\t"));
+            rows.push([field(c.meaning),back,deck,guid].join("\t"));
         }
     }
     download(["#separator:Tab","#html:true","#deck column:3","#guid column:4",...rows].join("\n")+"\n",
@@ -35,13 +35,13 @@ async function exportAnki(cards) {
 }
 async function reviewPage() {
     let [cards,settings] = await Promise.all([api("cards"),api("memory/options")]);
-    main.innerHTML = topbar("表达练习") + heading("Practice","表达练习","不同练习模式熟悉度独立") + '<section id="practiceArea" class="panel"></section>';
+    main.innerHTML = topbar("表达练习") + heading("Practice","表达练习","回译与例句挖空共享写出熟悉度") + '<section id="practiceArea" class="panel"></section>';
     const area = $("#practiceArea");
     if (!cards.length) {
         area.innerHTML = empty("表达库还是空的","在作文报告的「词汇提升」或「可迁移表达」中点击加入练习。","cards");
         return;
     }
-    const modes = {flash:"翻面背记",cloze:"例句挖空",recall:"回译"};
+    const modes = {cloze:"例句挖空",recall:"回译"};
     let mode="recall";
     const grades={again:"忘了",hard:"困难",good:"记得",easy:"轻松"};
     const levels=["未练习","学习中","生疏","较熟悉","熟悉"];
@@ -53,7 +53,7 @@ async function reviewPage() {
         let introduced=0;
         const due=[],fresh=[];
         for(const card of cards){
-            introduced+=Object.values(card.memory).filter(v=>v.first>=start.getTime()).length;
+            introduced+=Number(card.memory.recall.first>=start.getTime());
             for(const m of settings.modes){
                 const state=card.memory[m],entry={card,mode:m};
                 if(!state.count)fresh.push(entry);
@@ -71,8 +71,8 @@ async function reviewPage() {
           <div class="actions">${button("开始今日复习","dailyStart",true)}</div>
           <details class="compactdetail topgap"><summary>复习设置</summary><form class="stack">
           <label>期望保留率（%）<input type="number" name="retention" min="70" max="97" value="${settings.retention}" aria-describedby="retentionHelp" required><small id="retentionHelp" class="hint">设为 90% 时，系统会尽量安排你在还有约九成把握想起表达时复习，调得越高，通常就要复习得越勤。</small></label>
-          <label>每日新学上限（表达 × 模式）<input type="number" name="limit" min="0" max="100" value="${settings.new_limit}" required></label>
-          <div class="actions">${Object.entries(modes).map(([m,label])=>`<label><input type="checkbox" name="modes" value="${m}" ${settings.modes.includes(m)?"checked":""}>${label}</label>`).join("")}</div>
+          <label>每日新学表达上限<input type="number" name="limit" min="0" max="100" value="${settings.new_limit}" required></label>
+          <div class="actions">${Object.entries(modes).map(([m,label])=>`<label><input type="radio" name="modes" value="${m}" ${settings.modes.includes(m)?"checked":""}>${label}</label>`).join("")}</div>
           <button class="btn" type="submit">保存复习设置</button></form></details>`;
         const anchor=$("#dailyStart",area);
         anchor.disabled=!(due.length+fresh.length);
@@ -103,17 +103,15 @@ async function reviewPage() {
             const horizon=curve.points[curve.points.length-1][0];
             const coords=curve.points.map(([day,rate])=>`${8+284*day/horizon},${8+60*(1-rate/100)}`).join(" ");
             const targetY=8+60*(1-curve.retention/100);
-            graph=`<figure class="memory-curve"><figcaption><b>${modes[mode]} · 预计回忆率</b>　当前约 ${curve.today}%</figcaption>
+            graph=`<figure class="memory-curve"><figcaption><b>写出熟悉度 · 预计回忆率</b>　当前约 ${curve.today}%</figcaption>
                 <svg viewBox="0 0 300 80" role="img" aria-label="从上次作答起，预计回忆概率随时间变化">
                 <path d="M8 ${targetY} H292" stroke="#817b73" fill="none" stroke-dasharray="4 3"/>
                 <polyline points="${coords}" stroke="#55429a" stroke-width="2.5" fill="none"/></svg>
                 <small>上次作答 → 第 ${horizon} 天　·　虚线为 ${curve.retention}% 目标</small></figure>`;
         }
-        const summary=Object.entries(modes).map(([m,label])=>{
-            const state=card.memory[m];
-            return `<p><b>${label} · ${state.level}</b>　${state.count} 次有效自评${state.last?" · 最近复习 "+localDate(state.last)+" · 下次 "+localDate(state.due)+" · 跨 "+state.days+" 天练习 · 近次自评："+state.recent.map(r=>grades[r]).join("、"):""}</p>`;
-        }).join("");
-        const old=(r)=>r.result==="alternative"?(r.mode==="flash"?"有点模糊":"其他正确表达"):r.result==="recall"?(r.mode==="flash"?"记住了":"独立写出"):r.result;
+        const state=card.memory.recall;
+        const summary=`<p><b>写出熟悉度 · ${state.level}</b>　${state.count} 次有效自评${state.last?" · 最近复习 "+localDate(state.last)+" · 下次 "+localDate(state.due)+" · 跨 "+state.days+" 天练习 · 近次自评："+state.recent.map(r=>grades[r]).join("、"):""}</p>`;
+        const old=r=>({alternative:"其他正确表达",recall:"独立写出"})[r.result]||r.result;
         modal(card.target,graph+summary+logs.map(r=>`<details class="compactdetail"><summary>${localDate(r.moment)} · ${modes[r.mode]||"早期记录"} · ${esc(grades[r.result]||old(r))}</summary>
             <p>${esc(r.detail?.prompt||"早期记录未保存题面")}</p>${r.detail?.hint?`<p>${esc(r.detail.hint)}</p>`:""}
             ${r.answer?`<p>我的答案　${esc(r.answer)}</p>`:""}${r.detail?.reference?`<p>参考　${esc(r.detail.reference)}</p>`:""}
@@ -222,16 +220,16 @@ async function reviewPage() {
             <div class="source-filters">${filterPanel}</div><div class="sec"><h2>选择要练的词和表达</h2><span class="meta" id="selectionCount"></span></div>
             <div class="actions"><button class="soft" data-select="all">全选</button><button class="soft" data-select="due">只选到期 · ${visible.filter(due).length}</button><button class="soft" data-select="none">清空</button></div>
             <div class="study-list">${visible.map(c=>`<label><input type="checkbox" value="${esc(c.id)}" ${selected.has(c.id)?"checked":""}><span><b>${esc(c.target)}</b><small>${esc(c.meaning)}</small><small class="memory-level" data-level="${c.memory[mode].level}">${c.memory[mode].level}${due(c)?" · 已到期":""}</small></span></label>`).join("")}</div>
-            <div class="actions">${button(mode==="flash"?"开始背记":"生成新一轮练习","beginStudy",true)}
-            ${mode==="recall"?button("用报告里的例句练习","useStored"):""}${button("已生成的练习","historyExercises")}${button("导出所选到 Anki","anki")}</div>
-            <p class="hint topgap">${mode==="flash"?"英文在正面。先回忆含义，再翻面查看用法和例句。":"每轮从已选表达生成新语境，使用设置中的 Codex 或 API。"} Anki 2.1.54+ 以 Basic 导入，按「雅思作文 → Task → 来源作文」分牌组。</p>
+            <div class="actions">${button("生成新一轮练习","beginStudy",true)}
+            ${mode==="recall"?button("用报告里的例句练习","useStored"):""}${button("已生成的练习","historyExercises")}${button("快速翻看","browseWords")}${button("导出所选到 Anki","anki")}</div>
+            <p class="hint topgap">每轮从已选表达生成新语境，使用设置中的 Codex 或 API。 Anki 2.1.54+ 以 Basic 导入，按「雅思作文 → Task → 来源作文」分牌组。</p>
             <details id="expressionLibrary" class="compactdetail topgap" ${library.open?"open":""}><summary>表达速查</summary>
             <div class="word-toolbar"><input type="search" class="field" id="expressionSearch" aria-label="搜索表达或中文释义" placeholder="搜索英文表达或中文释义"><small id="libraryCount" class="meta" aria-live="polite"></small></div>
             <div id="libraryRows"></div><nav id="libraryNav" aria-label="表达速查分页"><button class="soft" id="libraryPrev">上一页</button><span></span><button class="soft" id="libraryNext">下一页</button></nav></details>`;
         bindLibrary(visible);
         const count = () => {
             $("#selectionCount",area).textContent=chosen().length+" / "+visible.length+" 项已选";
-            for (const btn of area.querySelectorAll("#beginStudy,#useStored,#anki")) btn.disabled=!chosen().length;
+            for (const btn of area.querySelectorAll("#beginStudy,#useStored,#anki,#browseWords")) btn.disabled=!chosen().length;
         };
         function bindFilters(){
         area.querySelectorAll(".filter-group").forEach(el=>el.ontoggle=()=>{if(!el.isConnected)return;if(el.open)expanded.add(el.dataset.key);else expanded.delete(el.dataset.key)});
@@ -256,6 +254,19 @@ async function reviewPage() {
             if(box.checked) selected.add(box.value); else selected.delete(box.value);
             count();
         });
+        $("#browseWords",area).onclick=()=>{
+            const words=chosen();
+            function browse(index){
+                const c=words[index];
+                modal(c.target,`<p>${esc(c.meaning)}</p><p>${esc(c.context)}</p><p>${esc(c.usage||"")}</p><div class="actions">
+                    ${button("上一个","prevWord")}<small>${index+1} / ${words.length}</small>${button("下一个","nextWord")}</div>`);
+                $("#prevWord").disabled=index===0;
+                $("#nextWord").disabled=index===words.length-1;
+                $("#prevWord").onclick=()=>browse(index-1);
+                $("#nextWord").onclick=()=>browse(index+1);
+            }
+            browse(0);
+        };
         $("#anki",area).onclick=()=>exportAnki(chosen()).catch(actionError);
         $("#historyExercises",area).onclick=async()=>{
             const anchor=$("#historyExercises",area);
@@ -279,7 +290,7 @@ async function reviewPage() {
         async function next() {
             if(!area.isConnected) return;
             if(index>=queue.length) {
-                area.innerHTML=`<h2>本轮完成</h2><p role="status">${esc(receipt)}</p><p class="sub">已练习 ${queue.length} 项。</p><div class="actions topgap">${button(dailyEntries?"查看今日复习":mode==="flash"||stored?"再练一轮":"生成下一轮新题","repeatRound",true)}${button("重新选词","pick")}</div>`;
+                area.innerHTML=`<h2>本轮完成</h2><p role="status">${esc(receipt)}</p><p class="sub">已练习 ${queue.length} 项。</p><div class="actions topgap">${button(dailyEntries?"查看今日复习":stored?"再练一轮":"生成下一轮新题","repeatRound",true)}${button("重新选词","pick")}</div>`;
                 $("#repeatRound",area).onclick=again; $("#pick",area).onclick=picker; return;
             }
             const card=queue[index];
@@ -288,7 +299,7 @@ async function reviewPage() {
                 const matches=savedPool.filter(x=>x.card===card.id && x.chinese && x.span);
                 if(matches.length)tasks.set(card.id+mode,matches[Math.floor(Math.random()*matches.length)]);
             }
-            if(mode!=="flash"&&(!stored||dailyEntries&&mode==="cloze")&&!tasks.has(card.id+mode)) {
+            if((!stored||dailyEntries&&mode==="cloze")&&!tasks.has(card.id+mode)) {
                 area.innerHTML=`<h2>正在生成新练习…</h2><p class="hint">模型正在为所选表达编写新句子并核对历史题目。</p>`;
                 try {
                     const batch=dailyEntries?[card.id]:queue.slice(index,index+6).map(c=>c.id);
@@ -302,37 +313,52 @@ async function reviewPage() {
             }
             if(!area.isConnected) return;
             const item=savedItem||tasks.get(card.id+mode)||{chinese:card.cue,sentence:card.answer};
-            const front= mode==="flash"?card.target:mode==="cloze"?item.sentence.replace(item.span,"________"):item.chinese;
+            const front= mode==="cloze"?item.sentence.replace(item.span,"________"):item.chinese;
             area.innerHTML=`<div class="row between"><span class="meta">${modes[mode]} · ${index+1} / ${queue.length}</span><button class="soft" id="pick">返回选词</button></div>
                 <p class="hint" role="status">${esc(receipt)}</p><h2 class="study-front">${esc(front)}</h2>
                 ${mode==="cloze"?`<p class="muted">${esc(item.chinese)}</p>`:""}
-                ${mode==="flash"?"":'<textarea class="study-answer" id="answer" aria-label="英文答案" placeholder="写下你的答案…"></textarea>'}
-                <div id="solution" class="topgap">${button(mode==="flash"?"翻面":"核对答案","reveal",true)}</div>`;
+                <textarea class="study-answer" id="answer" aria-label="英文答案" placeholder="写下你的答案…"></textarea>
+                <div id="solution" class="topgap">${button("核对答案","reveal",true)} ${mode==="recall"?button("给我挖空提示","clozeHint"):""}</div>`;
             $("#pick",area).textContent=dailyEntries?"返回今日复习":"返回选词";
             $("#pick",area).onclick=leave;
+            let usedHint="";
+            const hintButton=$("#clozeHint",area);
+            if(hintButton)hintButton.onclick=async()=>{
+                hintButton.disabled=true;
+                $("#reveal",area).disabled=true;
+                try{
+                    let span=item.span;
+                    if(!span){
+                        const at=item.sentence.toLowerCase().indexOf(card.target.toLowerCase());
+                        if(at>=0)span=item.sentence.slice(at,at+card.target.length);
+                    }
+                    usedHint=span?item.sentence.replace(span,"________"):item.sentence.replace(/\b[a-z]+(?:'[a-z]+)?\b/gi,
+                        word=>/^(the|a|an|is|was|were|are|to|of|for|from|in|at|by|and|but|with|on)$/i.test(word)?word:"____");
+                    hintButton.outerHTML=`<p class="notice">挖空提示 · ${esc(usedHint)}</p>`;
+                }catch(err){hintButton.disabled=false;actionError(err)}
+                finally{const reveal=$("#reveal",area);if(reveal)reveal.disabled=false}
+            };
             $("#reveal",area).onclick=async()=>{
                 const anchor=$("#reveal",area);anchor.disabled=true;
                 let times;
                 try{times=await api("memory/preview",{card:card.id,mode})}catch(err){anchor.disabled=false;actionError(err);return}
                 if(!anchor.isConnected)return;
-                const answer=mode==="flash"?"":$("#answer",area).value.trim();
-                if(mode!=="flash") $("#answer",area).disabled=true;
+                const answer=$("#answer",area).value.trim();
+                $("#answer",area).disabled=true;
                 const exact=mode==="cloze"&&answer.toLowerCase()===item.span.toLowerCase();
                 $("#solution",area).innerHTML=`<div class="notice"><b>${esc(mode==="cloze"?item.span:card.meaning)}</b>
-                    <p>${esc(mode==="flash"?card.context:item.sentence)}</p>${card.usage?`<p>${esc(card.usage)}</p>`:""}${card.collocation?`<p>搭配　${esc(card.collocation)}</p>`:""}</div>
+                    <p>${esc(item.sentence)}</p>${card.usage?`<p>${esc(card.usage)}</p>`:""}${card.collocation?`<p>搭配　${esc(card.collocation)}</p>`:""}</div>
                     <p class="hint">${exact?"与参考答案一致。":""}按这次实际回忆情况记录。</p><div class="actions topgap">
-                    ${Object.entries(grades).map(([key,label])=>`<button class="btn ${key==="good"?"primary":""}" data-result="${key}">${label}<small> · ${interval(times[key])}</small></button>`).join("")}</div>`;
+                    ${Object.entries(grades).filter(([key])=>!usedHint||key==="again").map(([key,label])=>`<button class="btn ${key==="good"?"primary":""}" data-result="${key}">${usedHint?"记录为未独立想起":label}<small> · ${interval(times[key])}</small></button>`).join("")}</div>`;
                 const reviewId=crypto.randomUUID();
                 const ratingButtons=area.querySelectorAll("[data-result]");
                 ratingButtons.forEach(b=>b.onclick=async()=>{
                     ratingButtons.forEach(el=>el.disabled=true);
                     try {
-                        const schedule=await api("reviews",{id:reviewId,card:card.id,answer,mode,result:b.dataset.result,source:dailyEntries?"daily":"free",prompt:front,hint:mode==="cloze"?item.chinese:"",reference:mode==="flash"?[card.meaning,card.context].filter(Boolean).join(" · "):item.sentence});
-                        card.memory[mode]=schedule.memory;
+                        const schedule=await api("reviews",{id:reviewId,card:card.id,answer,mode,result:b.dataset.result,source:dailyEntries?"daily":"free",prompt:front,hint:usedHint||(mode==="cloze"?item.chinese:""),reference:item.sentence});
+                        card.memory.recall=card.memory.cloze=schedule.memory;
                         receipt=card.target+" · 已记录「"+grades[b.dataset.result]+"」 · 下次 "+localDate(schedule.due);
-                        const field=mode==="flash"?"flash_due":"due";
-                        card[field]=schedule.due;
-                        cards.find(item=>item.id===card.id)[field]=schedule.due;
+                        card.due=schedule.due;
                         if(!b.isConnected)return;
                         index++; await next();
                     } catch(err){ratingButtons.forEach(el=>el.disabled=false);actionError(err)}

@@ -313,11 +313,8 @@ def cardlist(db):
         item=dict(r)
         item.update(json.loads(item.pop("body")))
         item["origins"]=[dict(x) for x in db.execute("SELECT sid,qid FROM origins WHERE card=?",(r["id"],))]
-        progress=db.execute("SELECT value FROM prefs WHERE key=?",("flash:"+item["id"],)).fetchone()
-        item["flash_due"]=json.loads(progress[0])["due"] if progress else 0
         item["memory"]={m:states.get(memory.state_key(item["id"],m),memory.describe(None)) for m in memory.MODES}
         item["due"]=item["memory"]["recall"]["due"] or 0
-        item["flash_due"]=item["memory"]["flash"]["due"] or 0
         result.append(item)
     return result
 
